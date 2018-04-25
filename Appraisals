@@ -11,6 +11,7 @@ end
 appraise 'mongoid-5' do
   gem "mongoid", "~> 5"
   gem "bson_ext", :platform => "ruby"
+  gem "rails", "~> 4.2.0"
 end
 
 appraise 'activerecord-3' do

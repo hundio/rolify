@@ -1,10 +1,13 @@
 require 'bundler'
 require 'rspec/core/rake_task'
 require 'coveralls/rake/task'
+require 'appraisal/task'
 
 Bundler::GemHelper.install_tasks
 
 Coveralls::RakeTask.new
+
+Appraisal::Task.new
 
 RSpec::Core::RakeTask.new(:generators) do |task|
   task.pattern = 'spec/generators/**/*_spec.rb'
