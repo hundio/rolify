@@ -5,6 +5,10 @@ shared_context "global role", :scope => :global do
     user_class.first
   end
   
+  def admin_id
+    admin.id
+  end
+  
   before(:all) do
     load_roles
     create_other_roles

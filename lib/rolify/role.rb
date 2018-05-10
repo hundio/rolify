@@ -9,39 +9,42 @@ module Rolify
       base.extend Finders
     end
 
-    def add_role(role_name, resource = nil)
-      role = self.class.adapter.find_or_create_by(role_name.to_s,
+    def add_role(role, resource = nil)
+      identifier, role = role_identifier role
+      role = self.class.adapter.find_or_create_by({ identifier => role },
                                                   (resource.is_a?(Class) ? resource.to_s : resource.class.name if resource),
                                                   (resource.id if resource && !resource.is_a?(Class)))
 
       if !roles.include?(role)
-        self.class.define_dynamic_method(role_name, resource) if Rolify.dynamic_shortcuts
+        self.class.define_dynamic_method(role.name, resource) if Rolify.dynamic_shortcuts
         self.class.adapter.add(self, role)
       end
       role
     end
     alias_method :grant, :add_role
 
-    def has_role?(role_name, resource = nil)
-      return has_strict_role?(role_name, resource) if self.class.strict_rolify and resource and resource != :any
-
+    def has_role?(role, resource = nil)
+      return has_strict_role?(role, resource) if self.class.strict_rolify and resource and resource != :any
+      identifier, role = role_identifier role
+      
       if new_record?
         role_array = self.roles.detect { |r|
-          r.name.to_s == role_name.to_s &&
+          r.send(identifier) == role &&
             (r.resource == resource ||
              resource.nil? ||
              (resource == :any && r.resource.present?))
         }
       else
-        role_array = self.class.adapter.where(self.roles, name: role_name, resource: resource)
+        role_array = self.class.adapter.where(self.roles, identifier => role, resource: resource)
       end
 
       return false if role_array.nil?
       role_array != []
     end
 
-    def has_strict_role?(role_name, resource)
-      self.class.adapter.where_strict(self.roles, name: role_name, resource: resource).any?
+    def has_strict_role?(role, resource)
+      identifier, role = role_identifier role
+      self.class.adapter.where_strict(self.roles, identifier => role, resource: resource).any?
     end
 
     def has_cached_role?(role_name, resource = nil)
@@ -57,10 +60,8 @@ module Rolify
       args.each do |arg|
         if arg.is_a? Hash
           return false if !self.has_role?(arg[:name], arg[:resource])
-        elsif arg.is_a?(String) || arg.is_a?(Symbol)
-          return false if !self.has_role?(arg)
         else
-          raise ArgumentError, "Invalid argument type: only hash or string or symbol allowed"
+          return false if !self.has_role?(arg)
         end
       end
       true
@@ -70,16 +71,26 @@ module Rolify
       if new_record?
         args.any? { |r| self.has_role?(r) }
       else
-        self.class.adapter.where(self.roles, *args).size > 0
+        queries = []
+        args.each do |arg|
+          if arg.is_a? Hash
+            queries << arg
+          else
+            identifier, role = role_identifier arg
+            queries << { identifier => role }
+          end
+        end
+        self.class.adapter.where(self.roles, *queries).size > 0
       end
     end
 
-    def only_has_role?(role_name, resource = nil)
-      return self.has_role?(role_name,resource) && self.roles.count == 1
+    def only_has_role?(role, resource = nil)
+      return self.has_role?(role, resource) && self.roles.count == 1
     end
 
-    def remove_role(role_name, resource = nil)
-      self.class.adapter.remove(self, role_name.to_s, resource)
+    def remove_role(role, resource = nil)
+      identifier, role = role_identifier role
+      self.class.adapter.remove(self, { identifier => role }, resource)
     end
 
     alias_method :revoke, :remove_role

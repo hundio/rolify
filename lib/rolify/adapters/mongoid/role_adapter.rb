@@ -8,15 +8,15 @@ module Rolify
         relation.any_of(*conditions)
       end
 
-      def where_strict(relation, args)
-        return relation.where(:name => args[:name]) if args[:resource].blank?
-        resource = if args[:resource].is_a?(Class)
-                     {class: args[:resource].to_s, id: nil}
+      def where_strict(relation, resource: nil, **args)
+        return relation.where(args) if resource.blank?
+        resource = if resource.is_a?(Class)
+                     {class: resource.to_s, id: nil}
                    else
-                     {class: args[:resource].class.name, id: args[:resource].id}
+                     {class: resource.class.name, id: resource.id}
                    end
 
-        relation.where(:name => args[:name], :resource_type => resource[:class], :resource_id => resource[:id])
+        relation.where({ :resource_type => resource[:class], :resource_id => resource[:id] }.merge(args))
       end
 
       def find_cached(relation, args)
@@ -41,17 +41,17 @@ module Rolify
         end
       end
 
-      def find_or_create_by(role_name, resource_type = nil, resource_id = nil)
-        self.role_class.find_or_create_by(:name => role_name,
-                                          :resource_type => resource_type,
-                                          :resource_id => resource_id)
+      def find_or_create_by(role_query_or_name, resource_type = nil, resource_id = nil)
+        cond = condition_from_role_query_or_name role_query_or_name
+        self.role_class.find_or_create_by({ :resource_type => resource_type,
+                                            :resource_id => resource_id }.merge(cond))
       end
 
       def add(relation, role)
         relation.roles << role
       end
 
-      def remove(relation, role_name, resource = nil)
+      def remove(relation, role_query_or_name, resource = nil)
         #roles = { :name => role_name }
         #roles.merge!({:resource_type => (resource.is_a?(Class) ? resource.to_s : resource.class.name)}) if resource
         #roles.merge!({ :resource_id => resource.id }) if resource && !resource.is_a?(Class)
@@ -66,7 +66,7 @@ module Rolify
         #
         #  role.destroy if role.send(user_class.to_s.tableize.to_sym).empty?
         #end
-        cond = { :name => role_name }
+        cond = condition_from_role_query_or_name role_query_or_name
         cond[:resource_type] = (resource.is_a?(Class) ? resource.to_s : resource.class.name) if resource
         cond[:resource_id] = resource.id if resource && !resource.is_a?(Class)
         roles = relation.roles.where(cond)
@@ -101,9 +101,10 @@ module Rolify
         conditions = []
         args.each do |arg|
           if arg.is_a? Hash
-            query = build_query(arg[:name], arg[:resource])
-          elsif arg.is_a?(String) || arg.is_a?(Symbol)
-            query = build_query(arg)
+            resource = arg.delete :resource
+            query = build_query(arg, resource: resource)
+          elsif args.is_a?(String) || args.is_a?(Symbol)
+            query = build_query(name: args)
           else
             raise ArgumentError, "Invalid argument type: only hash or string or symbol allowed"
           end
@@ -112,16 +113,24 @@ module Rolify
         conditions
       end
 
-      def build_query(role, resource = nil)
-        return [{ :name => role }] if resource == :any
-        query = [{ :name => role, :resource_type => nil, :resource_id => nil }]
+      def build_query(args, resource: nil)
+        return [args] if resource == :any
+        query = [{ :resource_type => nil, :resource_id => nil }.merge(args)]
         if resource
-          query << { :name => role, :resource_type => (resource.is_a?(Class) ? resource.to_s : resource.class.name), :resource_id => nil }
+          query << { :resource_type => (resource.is_a?(Class) ? resource.to_s : resource.class.name), :resource_id => nil }.merge(args)
           if !resource.is_a? Class
-            query << { :name => role, :resource_type => resource.class.name, :resource_id => resource.id }
+            query << { :resource_type => resource.class.name, :resource_id => resource.id }.merge(args)
           end
         end
         query
+      end
+    
+      def condition_from_role_query_or_name(role_query_or_name)
+        if role_query_or_name.is_a?(String) || role_query_or_name.is_a?(Symbol)
+          { name: role_query_or_name }
+        else
+          role_query_or_name
+        end
       end
     end
   end

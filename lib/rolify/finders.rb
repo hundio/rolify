@@ -1,7 +1,12 @@
+require "rolify/utils"
+
 module Rolify
   module Finders
-    def with_role(role_name, resource = nil)
-      self.adapter.scope(self, :name => role_name, :resource => resource)
+    extend Utils
+    
+    def with_role(role, resource = nil)
+      identifier, role = role_identifier role
+      self.adapter.scope(self, identifier => role, :resource => resource)
     end
 
     def without_role(role_name, resource = nil)
