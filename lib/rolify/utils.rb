@@ -18,7 +18,7 @@ module Rolify
         elsif role.is_a? BSON::ObjectId
           return :id, role
         else
-          return :id, role.id
+          return :itself, role
         end
       end
     end

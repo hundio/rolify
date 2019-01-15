@@ -11,9 +11,17 @@ module Rolify
 
     def add_role(role, resource = nil)
       identifier, role = role_identifier role
-      role = self.class.adapter.find_or_create_by({ identifier => role },
-                                                  (resource.is_a?(Class) ? resource.to_s : resource.class.name if resource),
-                                                  (resource.id if resource && !resource.is_a?(Class)))
+      role = case identifier
+      when :name
+        self.class.adapter.find_or_create_by({ identifier => role },
+                                          (resource.is_a?(Class) ? resource.to_s : resource.class.name if resource),
+                                          (resource.id if resource && !resource.is_a?(Class)))
+      when :id
+        self.class.adapter.find_or_create_by identifier => role
+      when :itself
+        role.save
+        role
+      end
 
       if !roles.include?(role)
         self.class.define_dynamic_method(role.name, resource) if Rolify.dynamic_shortcuts
@@ -28,18 +36,22 @@ module Rolify
       identifier, role = role_identifier role
       
       if new_record?
-        role_array = self.roles.detect { |r|
+        self.roles.any? { |r|
           r.send(identifier) == role &&
-            (r.resource == resource ||
+            (identifier != :name || (r.resource == resource ||
              resource.nil? ||
-             (resource == :any && r.resource.present?))
+             (resource == :any && r.resource.present?)))
         }
       else
-        role_array = self.class.adapter.where(self.roles, identifier => role, resource: resource)
+        case identifier
+        when :name
+          self.class.adapter.where(self.roles, identifier => role, resource: resource).exists?
+        when :id
+          self.class.adapter.where(self.roles, identifier => role).exists?
+        when :itself
+          self.roles.include? role
+        end
       end
-
-      return false if role_array.nil?
-      role_array != []
     end
 
     def has_strict_role?(role, resource)
@@ -77,6 +89,7 @@ module Rolify
             queries << arg
           else
             identifier, role = role_identifier arg
+            return true if identifier == :itself && self.roles.include?(role)
             queries << { identifier => role }
           end
         end
@@ -90,6 +103,10 @@ module Rolify
 
     def remove_role(role, resource = nil)
       identifier, role = role_identifier role
+      if identifier == :itself
+        role = role.id
+        identifier = :id
+      end
       self.class.adapter.remove(self, { identifier => role }, resource)
     end
 

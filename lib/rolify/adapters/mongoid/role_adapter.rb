@@ -85,7 +85,7 @@ module Rolify
       end
 
       def scope(relation, conditions)
-        roles = where(role_class, conditions).map { |role| role.id }
+        roles = where(role_class, conditions).pluck :_id
         return [] if roles.size.zero?
         query = relation.any_in(:role_ids => roles)
         query
@@ -101,8 +101,7 @@ module Rolify
         conditions = []
         args.each do |arg|
           if arg.is_a? Hash
-            resource = arg.delete :resource
-            query = build_query(arg, resource: resource)
+            query = build_query arg
           elsif args.is_a?(String) || args.is_a?(Symbol)
             query = build_query(name: args)
           else
@@ -113,7 +112,9 @@ module Rolify
         conditions
       end
 
-      def build_query(args, resource: nil)
+      def build_query(**args)
+        return [args] unless args.key? :resource
+        resource = args.delete :resource
         return [args] if resource == :any
         query = [{ :resource_type => nil, :resource_id => nil }.merge(args)]
         if resource

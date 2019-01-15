@@ -6,7 +6,14 @@ module Rolify
     
     def with_role(role, resource = nil)
       identifier, role = role_identifier role
-      self.adapter.scope(self, identifier => role, :resource => resource)
+      case identifier
+      when :name
+        self.adapter.scope(self, identifier => role, :resource => resource)
+      when :id
+        self.any_in(role_ids: role)
+      when :itself
+        self.any_in(role_ids: role.id)
+      end
     end
 
     def without_role(role_name, resource = nil)
