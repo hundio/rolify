@@ -101,7 +101,7 @@ module Rolify
         conditions = []
         args.each do |arg|
           if arg.is_a? Hash
-            query = build_query arg
+            query = build_query(**arg)
           elsif args.is_a?(String) || args.is_a?(Symbol)
             query = build_query(name: args)
           else
@@ -125,7 +125,7 @@ module Rolify
         end
         query
       end
-    
+
       def condition_from_role_query_or_name(role_query_or_name)
         if role_query_or_name.is_a?(String) || role_query_or_name.is_a?(Symbol)
           { name: role_query_or_name }
